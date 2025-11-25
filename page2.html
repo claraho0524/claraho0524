@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三角形面積互動示範</title>
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --secondary-color: #ec4899;
+            --bg-color: #f8fafc;
+            --text-color: #334155;
+            --line-color: #64748b;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden; /* 防止拖曳時捲動 */
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+            color: #1e293b;
+        }
+
+        .info-panel {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            font-variant-numeric: tabular-nums;
+        }
+
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: 500px; /* 固定高度 */
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border: 2px solid #e2e8f0;
+            touch-action: none; /* 重要：防止手機上下捲動 */
+            overflow: hidden;
+            user-select: none;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            cursor: default;
+        }
+
+        /* SVG Elements Styling */
+        .triangle-shape {
+            fill: rgba(79, 70, 229, 0.1);
+            stroke: var(--primary-color);
+            stroke-width: 3;
+            stroke-linejoin: round;
+        }
+
+        .control-point {
+            fill: white;
+            stroke: var(--secondary-color);
+            stroke-width: 3;
+            cursor: grab;
+            transition: r 0.2s;
+        }
+
+        .control-point:hover {
+            r: 10;
+            fill: var(--secondary-color);
+        }
+
+        .control-point:active {
+            cursor: grabbing;
+            fill: var(--secondary-color);
+        }
+
+        .height-line {
+            stroke: var(--line-color);
+            stroke-width: 2;
+            stroke-dasharray: 6;
+        }
+
+        .base-line-highlight {
+            stroke: #0ea5e9;
+            stroke-width: 4;
+            stroke-linecap: round;
+        }
+
+        .label-text {
+            font-size: 14px;
+            fill: var(--text-color);
+            font-weight: bold;
+            text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+            pointer-events: none; /* 讓文字不干擾拖曳 */
+        }
+
+        .vertex-label {
+            font-size: 16px;
+            fill: var(--secondary-color);
+            font-weight: bold;
+            pointer-events: none;
+        }
+
+        .hint {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>三角形面積互動實驗室</h1>
+    
+    <div class="info-panel">
+        <div class="stat-item">
+            <span class="stat-label">底 (Base BC)</span>
+            <span class="stat-value" id="val-base">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">高 (Height h)</span>
+            <span class="stat-value" id="val-height">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label" style="color:var(--secondary-color)">面積 (Area)</span>
+            <span class="stat-value" id="val-area" style="color:var(--secondary-color)">0</span>
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <svg id="main-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice">
+            <!-- 輔助線與填充 -->
+            <path id="height-line" class="height-line" d="" />
+            <line id="base-line-highlight" class="base-line-highlight" />
+            <path id="triangle" class="triangle-shape" d="" />
+
+            <!-- 標註文字 -->
+            <text id="label-h" class="label-text" text-anchor="middle">h</text>
+            <text id="label-b" class="label-text" text-anchor="middle">Base</text>
+            
+            <!-- 頂點 -->
+            <!-- 為了邏輯簡單，設定 A 為上方頂點，BC 為底邊 -->
+            <circle id="pA" class="control-point" r="8" cx="400" cy="100" />
+            <circle id="pB" class="control-point" r="8" cx="200" cy="400" />
+            <circle id="pC" class="control-point" r="8" cx="600" cy="400" />
+
+            <!-- 頂點名稱 -->
+            <text id="textA" class="vertex-label" text-anchor="middle">A</text>
+            <text id="textB" class="vertex-label" text-anchor="middle">B</text>
+            <text id="textC" class="vertex-label" text-anchor="middle">C</text>
+        </svg>
+    </div>
+    <p class="hint">拖動 A、B、C 圓點來改變形狀</p>
+</div>
+
+<script>
+    // 獲取 DOM 元素
+    const svg = document.getElementById('main-svg');
+    const trianglePath = document.getElementById('triangle');
+    const heightLine = document.getElementById('height-line');
+    const baseLineHighlight = document.getElementById('base-line-highlight');
+    
+    // 頂點元素
+    const points = {
+        A: document.getElementById('pA'),
+        B: document.getElementById('pB'),
+        C: document.getElementById('pC')
+    };
+
+    // 文字元素
+    const labels = {
+        h: document.getElementById('label-h'),
+        b: document.getElementById('label-b'),
+        A: document.getElementById('textA'),
+        B: document.getElementById('textB'),
+        C: document.getElementById('textC')
+    };
+
+    // 數值顯示
+    const display = {
+        base: document.getElementById('val-base'),
+        height: document.getElementById('val-height'),
+        area: document.getElementById('val-area')
+    };
+
+    // 狀態
+    let activePoint = null;
+    
+    // 初始化座標 (對應 HTML 中的初始值)
+    let coords = {
+        A: { x: 400, y: 100 },
+        B: { x: 200, y: 400 },
+        C: { x: 600, y: 400 }
+    };
+
+    // --- 數學輔助函式 ---
+
+    function getDistance(p1, p2) {
+        return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+    }
+
+    // 鞋帶公式計算面積
+    function getTriangleArea(p1, p2, p3) {
+        return 0.5 * Math.abs(
+            p1.x * (p2.y - p3.y) +
+            p2.x * (p3.y - p1.y) +
+            p3.x * (p1.y - p2.y)
+        );
+    }
+
+    // 計算點 p 在線段 ab 上的投影點
+    function getProjection(p, a, b) {
+        const atob = { x: b.x - a.x, y: b.y - a.y };
+        const atop = { x: p.x - a.x, y: p.y - a.y };
+        const len = atob.x * atob.x + atob.y * atob.y;
+        
+        if (len === 0) return a; // a 和 b 重疊
+
+        let dot = atop.x * atob.x + atop.y * atob.y;
+        let t = dot / len;
+        
+        return {
+            x: a.x + atob.x * t,
+            y: a.y + atob.y * t
+        };
+    }
+
+    // --- 繪圖與更新邏輯 ---
+
+    function update() {
+        // 1. 更新三角形路徑
+        const pathD = `M ${coords.A.x} ${coords.A.y} L ${coords.B.x} ${coords.B.y} L ${coords.C.x} ${coords.C.y} Z`;
+        trianglePath.setAttribute('d', pathD);
+
+        // 2. 計算數值
+        // 設定 BC 為底 (Base)
+        const baseLength = getDistance(coords.B, coords.C);
+        const area = getTriangleArea(coords.A, coords.B, coords.C);
+        // 高 = 2 * 面積 / 底
+        const heightLength = baseLength === 0 ? 0 : (2 * area) / baseLength;
+
+        // 3. 計算高 (Altitude) 的繪製位置
+        // 找出 A 點在 BC 連線上的投影點 P
+        const P = getProjection(coords.A, coords.B, coords.C);
+
+        // 繪製高線：從 A 到 P
+        // 如果 P 不在 BC 線段上（鈍角三角形），這條線依然代表高
+        heightLine.setAttribute('d', `M ${coords.A.x} ${coords.A.y} L ${P.x} ${P.y}`);
+
+        // 4. 強調底邊 (BC)
+        baseLineHighlight.setAttribute('x1', coords.B.x);
+        baseLineHighlight.setAttribute('y1', coords.B.y);
+        baseLineHighlight.setAttribute('x2', coords.C.x);
+        baseLineHighlight.setAttribute('y2', coords.C.y);
+
+        // 5. 更新文字位置
+        
+        // 頂點標籤偏移
+        labels.A.setAttribute('x', coords.A.x); labels.A.setAttribute('y', coords.A.y - 15);
+        labels.B.setAttribute('x', coords.B.x - 15); labels.B.setAttribute('y', coords.B.y + 15);
+        labels.C.setAttribute('x', coords.C.x + 15); labels.C.setAttribute('y', coords.C.y + 15);
+
+        // 高度標籤 (h)：放在高線的中點
+        labels.h.setAttribute('x', (coords.A.x + P.x) / 2 + 10); // 稍微偏移
+        labels.h.setAttribute('y', (coords.A.y + P.y) / 2);
+        labels.h.textContent = `h = ${Math.round(heightLength)}`;
+
+        // 底部標籤 (b)：放在 BC 線段的中點
+        labels.b.setAttribute('x', (coords.B.x + coords.C.x) / 2);
+        labels.b.setAttribute('y', (coords.B.y + coords.C.y) / 2 + 20);
+        labels.b.textContent = `Base = ${Math.round(baseLength)}`;
+
+        // 6. 更新 UI 面板數值
+        display.base.textContent = Math.round(baseLength);
+        display.height.textContent = Math.round(heightLength);
+        display.area.textContent = Math.round(area).toLocaleString();
+    }
+
+    // --- 事件處理 ---
+
+    function getMousePosition(evt) {
+        const CTM = svg.getScreenCTM();
+        if (evt.touches) { evt = evt.touches[0]; }
+        return {
+            x: (evt.clientX - CTM.e) / CTM.a,
+            y: (evt.clientY - CTM.f) / CTM.d
+        };
+    }
+
+    function startDrag(evt, pointName) {
+        activePoint = pointName;
+        // 讓圓點看起來被按下
+        points[pointName].style.fill = getComputedStyle(document.documentElement).getPropertyValue('--secondary-color');
+    }
+
+    function drag(evt) {
+        if (!activePoint) return;
+        evt.preventDefault(); // 防止觸控時捲動頁面
+
+        const pos = getMousePosition(evt);
+        
+        // 限制範圍 (Padding 20px)
+        const padding = 20;
+        const width = 800;
+        const height = 500;
+
+        // 簡單的邊界檢查
+        let nx = Math.max(padding, Math.min(width - padding, pos.x));
+        let ny = Math.max(padding, Math.min(height - padding, pos.y));
+
+        // 更新座標
+        coords[activePoint].x = nx;
+        coords[activePoint].y = ny;
+
+        // 更新圓點 SVG 位置
+        points[activePoint].setAttribute('cx', nx);
+        points[activePoint].setAttribute('cy', ny);
+
+        update();
+    }
+
+    function endDrag() {
+        if (activePoint) {
+            points[activePoint].style.fill = "white"; // 恢復顏色
+        }
+        activePoint = null;
+    }
+
+    // 綁定事件
+    ['A', 'B', 'C'].forEach(key => {
+        const el = points[key];
+        el.addEventListener('mousedown', (e) => startDrag(e, key));
+        el.addEventListener('touchstart', (e) => startDrag(e, key));
+    });
+
+    // 全局移動事件 (確保拖曳出 SVG 範圍也不會斷掉)
+    window.addEventListener('mousemove', drag);
+    window.addEventListener('touchmove', drag, { passive: false });
+    window.addEventListener('mouseup', endDrag);
+    window.addEventListener('touchend', endDrag);
+
+    // 初始繪製
+    update();
+
+</script>
+
+</body>
+</html>
