@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>幾何神探：尋找底與高</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --success: #22c55e;
+            --error: #ef4444;
+            --highlight: #f59e0b;
+            --bg: #f0f9ff;
+            --ui-bg: #ffffff;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', 'Microsoft JhengHei', sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            width: 100%;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        h1 {
+            margin: 0;
+            color: #334155;
+            font-size: 1.8rem;
+        }
+
+        .score-board {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #64748b;
+        }
+
+        .score-val {
+            color: var(--primary);
+        }
+
+        .game-area {
+            position: relative;
+            margin: 20px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            padding: 10px;
+            width: 90%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .question-box {
+            background: #e0e7ff;
+            color: #3730a3;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+            border: 2px solid #c7d2fe;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 500px;
+            position: relative;
+            touch-action: none;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        /* 遊戲元素樣式 */
+        .triangle-fill {
+            fill: rgba(79, 70, 229, 0.05);
+            pointer-events: none;
+        }
+
+        /* 可互動的線條 (透明加粗，增加點擊範圍) */
+        .hit-area {
+            stroke: transparent;
+            stroke-width: 20;
+            fill: none;
+            cursor: pointer;
+        }
+
+        /* 視覺線條 */
+        .visual-line {
+            stroke-width: 4;
+            stroke-linecap: round;
+            fill: none;
+            pointer-events: none; /* 點擊穿透到 hit-area */
+            transition: all 0.3s ease;
+        }
+
+        .side-line {
+            stroke: #334155;
+        }
+
+        .altitude-line {
+            stroke: #94a3b8;
+            stroke-dasharray: 8 6;
+            stroke-width: 3;
+        }
+
+        /* 狀態樣式 */
+        .highlighted {
+            stroke: var(--highlight) !important;
+            stroke-width: 6 !important;
+            filter: drop-shadow(0 0 4px var(--highlight));
+        }
+
+        .correct {
+            stroke: var(--success) !important;
+            stroke-width: 6 !important;
+        }
+
+        .wrong {
+            stroke: var(--error) !important;
+            opacity: 0.5;
+        }
+
+        /* Hover效果 (僅在非觸控裝置) */
+        @media (hover: hover) {
+            .interactive:hover + .visual-line {
+                stroke: var(--primary);
+                stroke-width: 6;
+            }
+            /* 當該元素是目標提示時，hover 不變色 */
+            .interactive.target-mode:hover + .visual-line {
+                 /* 保持原樣，由 JS 控制 */
+            }
+        }
+
+        .vertex-label {
+            font-size: 18px;
+            font-weight: bold;
+            fill: #1e293b;
+            pointer-events: none;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+
+        .feedback-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 40px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            display: none;
+            border: 4px solid var(--primary);
+            z-index: 10;
+        }
+
+        .feedback-text {
+            font-size: 2rem;
+            margin: 0 0 20px 0;
+            font-weight: 900;
+        }
+
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            font-family: inherit;
+            font-weight: bold;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+            background: #4338ca;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            animation: fall linear forwards;
+        }
+
+        @keyframes fall {
+            to { transform: translateY(500px) rotate(720deg); }
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>幾何神探：尋找底與高</h1>
+    <div class="score-board">
+        <span>得分: <span id="score" class="score-val">0</span></span>
+        <span>題數: <span id="round" class="score-val">1</span></span>
+    </div>
+</div>
+
+<div class="game-area">
+    <div id="question-text" class="question-box">
+        載入中...
+    </div>
+
+    <div id="canvas-container">
+        <svg id="game-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice">
+            <!-- 三角形填充 -->
+            <path id="tri-fill" class="triangle-fill" d="" />
+
+            <!-- 高 (Altitudes) 放在底層 -->
+            <g id="group-altitudes"></g>
+
+            <!-- 邊 (Sides) -->
+            <g id="group-sides"></g>
+
+            <!-- 頂點文字 -->
+            <text id="label-A" class="vertex-label">A</text>
+            <text id="label-B" class="vertex-label">B</text>
+            <text id="label-C" class="vertex-label">C</text>
+        </svg>
+
+        <!-- 回饋彈窗 -->
+        <div id="feedback-modal" class="feedback-overlay">
+            <p id="feedback-msg" class="feedback-text">答對了！</p>
+            <button class="btn" onclick="game.nextRound()">下一題</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    class TriangleGame {
+        constructor() {
+            this.svg = document.getElementById('game-svg');
+            this.groups = {
+                sides: document.getElementById('group-sides'),
+                altitudes: document.getElementById('group-altitudes')
+            };
+            this.fill = document.getElementById('tri-fill');
+            this.ui = {
+                question: document.getElementById('question-text'),
+                score: document.getElementById('score'),
+                round: document.getElementById('round'),
+                modal: document.getElementById('feedback-modal'),
+                feedbackMsg: document.getElementById('feedback-msg'),
+                labels: {
+                    A: document.getElementById('label-A'),
+                    B: document.getElementById('label-B'),
+                    C: document.getElementById('label-C')
+                }
+            };
+            
+            this.state = {
+                score: 0,
+                round: 1,
+                isInteractive: true,
+                currentQuestion: null,
+                coords: {}
+            };
+
+            this.init();
+        }
+
+        init() {
+            this.nextRound();
+        }
+
+        // 生成隨機整數
+        random(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // 生成新的三角形座標
+        generateTriangle() {
+            // 畫布範圍 800x500
+            // 預留邊距 100
+            const padding = 100;
+            const w = 800;
+            const h = 500;
+
+            // 隨機生成 A, B, C
+            // 策略：B, C 在下方較寬，A 在上方隨機，避免太扁
+            let A = { x: this.random(padding, w - padding), y: this.random(padding, h/2) };
+            let B = { x: this.random(padding, w/2 - 50), y: this.random(h/2 + 50, h - padding) };
+            let C = { x: this.random(w/2 + 50, w - padding), y: this.random(h/2 + 50, h - padding) };
+
+            // 確保不是太奇怪的三角形 (面積不能太小)
+            const area = Math.abs((B.x - A.x) * (C.y - A.y) - (A.x - B.x) * (B.y - C.y)); // 簡化版檢測
+            if (area < 5000) return this.generateTriangle(); // 重試
+
+            this.state.coords = { A, B, C };
+        }
+
+        // 計算垂足 (高與底的交點，可能在延長線上)
+        getProjection(p, a, b) {
+            const atob = { x: b.x - a.x, y: b.y - a.y };
+            const atop = { x: p.x - a.x, y: p.y - a.y };
+            const len = atob.x * atob.x + atob.y * atob.y;
+            let dot = atop.x * atob.x + atop.y * atob.y;
+            let t = dot / len;
+            return {
+                x: a.x + atob.x * t,
+                y: a.y + atob.y * t
+            };
+        }
+
+        draw() {
+            const { A, B, C } = this.state.coords;
+            const sides = [
+                { id: 'side_c', p1: A, p2: B, name: 'AB', type: 'side' }, // c邊對角C (但這裡是AB邊)
+                { id: 'side_a', p1: B, p2: C, name: 'BC', type: 'side' }, // a邊對角A
+                { id: 'side_b', p1: C, p2: A, name: 'CA', type: 'side' }  // b邊對角B
+            ];
+
+            // 計算高的終點 (垂足)
+            const pedalA = this.getProjection(A, B, C); // A 到 BC 的垂足
+            const pedalB = this.getProjection(B, A, C); // B 到 AC 的垂足
+            const pedalC = this.getProjection(C, A, B); // C 到 AB 的垂足
+
+            const altitudes = [
+                { id: 'alt_a', p1: A, p2: pedalA, name: 'h_a', type: 'altitude', targetSide: 'side_a' },
+                { id: 'alt_b', p1: B, p2: pedalB, name: 'h_b', type: 'altitude', targetSide: 'side_b' },
+                { id: 'alt_c', p1: C, p2: pedalC, name: 'h_c', type: 'altitude', targetSide: 'side_c' }
+            ];
+
+            // 清空畫布
+            this.groups.sides.innerHTML = '';
+            this.groups.altitudes.innerHTML = '';
+
+            // 繪製三角形填充
+            this.fill.setAttribute('d', `M ${A.x} ${A.y} L ${B.x} ${B.y} L ${C.x} ${C.y} Z`);
+
+            // 繪製頂點標籤
+            this.updateLabels(A, B, C);
+
+            // 繪製高
+            altitudes.forEach(alt => this.createInteractiveLine(alt, this.groups.altitudes, 'altitude-line'));
+
+            // 繪製邊
+            sides.forEach(side => this.createInteractiveLine(side, this.groups.sides, 'side-line'));
+
+            return { sides, altitudes };
+        }
+
+        updateLabels(A, B, C) {
+            const offset = 20;
+            this.ui.labels.A.setAttribute('x', A.x); this.ui.labels.A.setAttribute('y', A.y - offset);
+            this.ui.labels.B.setAttribute('x', B.x - offset); this.ui.labels.B.setAttribute('y', B.y + offset);
+            this.ui.labels.C.setAttribute('x', C.x + offset); this.ui.labels.C.setAttribute('y', C.y + offset);
+        }
+
+        createInteractiveLine(obj, group, visualClass) {
+            // 建立群組
+            const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            
+            // 1. 透明點擊區 (粗)
+            const hit = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            hit.setAttribute('x1', obj.p1.x); hit.setAttribute('y1', obj.p1.y);
+            hit.setAttribute('x2', obj.p2.x); hit.setAttribute('y2', obj.p2.y);
+            hit.setAttribute('class', `hit-area interactive ${obj.type}`); // interactive 類用於事件委派
+            hit.dataset.id = obj.id;
+
+            // 2. 視覺線條 (細)
+            const visual = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            visual.setAttribute('x1', obj.p1.x); visual.setAttribute('y1', obj.p1.y);
+            visual.setAttribute('x2', obj.p2.x); visual.setAttribute('y2', obj.p2.y);
+            visual.setAttribute('class', `visual-line ${visualClass}`);
+            visual.setAttribute('id', `vis-${obj.id}`);
+
+            g.appendChild(hit);
+            g.appendChild(visual);
+            g.onclick = (e) => this.handleInput(obj.id);
+            
+            group.appendChild(g);
+        }
+
+        nextRound() {
+            this.state.isInteractive = true;
+            this.ui.modal.style.display = 'none';
+            this.generateTriangle();
+            const elements = this.draw();
+
+            // 隨機決定題型
+            // 0: 給底找高 (Find Height given Base)
+            // 1: 給高找底 (Find Base given Height)
+            const mode = Math.random() > 0.5 ? 0 : 1;
+            
+            // 隨機選一組對應 (a, b, or c)
+            const pairIndex = this.random(0, 2);
+            const targetSide = elements.sides[pairIndex];
+            const targetAlt = elements.altitudes[pairIndex];
+
+            if (mode === 0) {
+                // 給底找高
+                this.state.currentQuestion = {
+                    type: 'FIND_HEIGHT',
+                    prompt: `如果底是 <span style="color:var(--highlight)">${targetSide.name}</span>，請問對應的高是哪一條？`,
+                    highlightId: targetSide.id,
+                    targetId: targetAlt.id
+                };
+            } else {
+                // 給高找底
+                this.state.currentQuestion = {
+                    type: 'FIND_BASE',
+                    prompt: `如果高是 <span style="color:var(--highlight)">虛線 (通過${targetAlt.p1 === this.state.coords.A ? 'A' : (targetAlt.p1 === this.state.coords.B ? 'B' : 'C')})</span>，請問對應的底是哪一條？`,
+                    highlightId: targetAlt.id,
+                    targetId: targetSide.id
+                };
+            }
+
+            this.updateUI();
+        }
+
+        updateUI() {
+            this.ui.question.innerHTML = this.state.currentQuestion.prompt;
+            this.ui.score.innerText = this.state.score;
+            this.ui.round.innerText = this.state.round;
+
+            // 高亮提示的線條
+            const hlId = this.state.currentQuestion.highlightId;
+            const hlEl = document.getElementById(`vis-${hlId}`);
+            if (hlEl) hlEl.classList.add('highlighted');
+        }
+
+        handleInput(clickedId) {
+            if (!this.state.isInteractive) return;
+
+            const { targetId, highlightId } = this.state.currentQuestion;
+            
+            // 如果點擊到提示用的線，不做反應 (避免誤解)
+            if (clickedId === highlightId) return;
+
+            const clickedEl = document.getElementById(`vis-${clickedId}`);
+            const correctEl = document.getElementById(`vis-${targetId}`);
+
+            this.state.isInteractive = false;
+
+            if (clickedId === targetId) {
+                // 答對
+                this.state.score += 10;
+                clickedEl.classList.add('correct');
+                this.showFeedback(true, "太棒了！答對了！");
+                this.spawnConfetti();
+            } else {
+                // 答錯
+                clickedEl.classList.add('wrong');
+                correctEl.classList.add('correct'); // 顯示正確答案
+                this.showFeedback(false, "哎呀，再試一次！<br>綠色線條才是正確答案喔。");
+            }
+        }
+
+        showFeedback(isCorrect, msg) {
+            this.ui.feedbackMsg.innerHTML = msg;
+            this.ui.feedbackMsg.style.color = isCorrect ? 'var(--success)' : 'var(--error)';
+            setTimeout(() => {
+                this.ui.modal.style.display = 'block';
+                if (isCorrect) {
+                     this.state.round++;
+                }
+            }, 500);
+        }
+
+        spawnConfetti() {
+            for(let i=0; i<30; i++) {
+                const conf = document.createElement('div');
+                conf.classList.add('confetti');
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.backgroundColor = ['#f00', '#0f0', '#00f', '#ff0', '#f0f'][Math.floor(Math.random()*5)];
+                conf.style.animationDuration = (Math.random() * 2 + 1) + 's';
+                document.body.appendChild(conf);
+                setTimeout(() => conf.remove(), 3000);
+            }
+        }
+    }
+
+    // 啟動遊戲
+    const game = new TriangleGame();
+
+</script>
+
+</body>
+</html>
